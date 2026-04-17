@@ -69,13 +69,22 @@ curl http://localhost/health
 docker compose -f 02-docker/production/docker-compose.yml down
 ```
 
+### Sơ đồ kiến trúc (Exercise 2.4)
+```mermaid
+graph LR
+    Client((Client)) -->|Port 80| Nginx[Nginx Reverse Proxy]
+    Nginx -->|Proxy Pass| Agent[Production Agent]
+    Agent -->|Cache/History| Redis[(Redis DB)]
+    Agent -->|Config| Env[.env File]
+```
+
 ### So sánh image size:
 
 ```bash
-# Basic vs Advanced
-docker images | grep agent
-# agent-basic    ~  800 MB  ← python:3.11 base
-# agent-advanced ~  160 MB  ← python:3.11-slim + multi-stage
+# Basic vs Advanced (Kết quả thực tế trên máy của tôi)
+docker images | findstr agent
+# agent-basic      ~  1.66 GB  ← python:3.11 base (Rất nặng!)
+# production-agent ~   236 MB  ← python:3.11-slim + multi-stage (Tối ưu 7x)
 ```
 
 ---
@@ -98,6 +107,13 @@ COPY --from=builder ...        # copy chỉ /site-packages
 
 ## Câu hỏi thảo luận
 
-1. Tại sao `COPY requirements.txt .` rồi `RUN pip install` TRƯỚC khi `COPY . .`?
-2. `.dockerignore` nên chứa những gì? Tại sao `venv/` và `.env` quan trọng?
-3. Nếu agent cần đọc file từ disk, làm sao mount volume vào container?
+1. **Tại sao `COPY requirements.txt .` rồi `RUN pip install` TRƯỚC khi `COPY . .`?**
+   > **Trả lời:** Đây là kỹ thuật **Layer Caching**. Docker lưu lại kết quả của từng lệnh thành một layer. `pip install` thường tốn nhiều thời gian. Nếu chúng ta copy toàn bộ code trước, mỗi khi sủa 1 dòng code, Docker sẽ phải chạy lại `pip install`. Bằng cách copy `requirements.txt` riêng, Docker chỉ chạy lại lệnh này khi file requirements thay đổi, giúp build image cực nhanh (chỉ mất vài giây thay vì vài phút).
+
+2. **`.dockerignore` nên chứa những gì? Tại sao `venv/` và `.env` quan trọng?**
+   > **Trả lời:** `.dockerignore` nên chứa `__pycache__`, `.git`, `venv/`, `.env`, và các file log.
+   > - **`venv/`**: Chúng ta không muốn copy bộ thư viện từ máy local (có thể khác hệ điều hành) vào container. Container sẽ tự cài thư viện riêng.
+   > - **`.env`**: Tránh việc commit nhầm API key vào Docker Image. Image có thể được đẩy lên Docker Hub public, nếu có `.env` thì bí mật của bạn sẽ bị lộ.
+
+3. **Nếu agent cần đọc file từ disk, làm sao mount volume vào container?**
+   > **Trả lời:** Chúng ta sử dụng tham số `-v` (volume). Ví dụ: `docker run -v C:/data:/app/data agent-image`. Hoặc trong Docker Compose, định nghĩa phần `volumes: - ./data:/app/data`. Điều này giúp dữ liệu persists (tồn tại) ngay cả khi container bị xóa.

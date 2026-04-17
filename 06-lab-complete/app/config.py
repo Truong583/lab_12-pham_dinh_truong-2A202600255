@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 class Settings:
     # Server
     host: str = field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
-    port: int = field(default_factory=lambda: int(os.getenv("PORT", "8000")))
+    port: int = field(default_factory=lambda: int(os.getenv("PORT", os.getenv("SERVICE_PORT", "8000"))))
     environment: str = field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
     debug: bool = field(default_factory=lambda: os.getenv("DEBUG", "false").lower() == "true")
 
@@ -38,7 +38,16 @@ class Settings:
     )
 
     # Storage
-    redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", ""))
+    @property
+    def redis_url(self) -> str:
+        # Tự động nhận diện từ Railway (REDIS_PRIVATE_URL, REDIS_URL) 
+        # hoặc Render (REDIS_URL) hoặc Local
+        return (
+            os.getenv("REDIS_PRIVATE_URL") or 
+            os.getenv("REDIS_URL") or 
+            os.getenv("REDIS_DATABASE_URL") or 
+            ""
+        )
 
     def validate(self):
         logger = logging.getLogger(__name__)

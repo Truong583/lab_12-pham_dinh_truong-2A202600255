@@ -1,23 +1,24 @@
 services:
   - type: web
     name: ai-agent-production
-    runtime: docker
-    region: singapore
-    plan: starter
-    healthCheckPath: /health
-    autoDeploy: true
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.main
     envVars:
+      - key: HOST
+        value: 0.0.0.0
       - key: ENVIRONMENT
         value: production
-      - key: APP_VERSION
-        value: "1.0.0"
-      - key: OPENAI_API_KEY
-        sync: false
       - key: AGENT_API_KEY
         generateValue: true
       - key: JWT_SECRET
         generateValue: true
-      - key: DAILY_BUDGET_USD
-        value: "5.0"
-      - key: RATE_LIMIT_PER_MINUTE
-        value: "20"
+      - key: REDIS_URL
+        fromService:
+          name: redis-internal
+          type: redis
+          property: connectionString
+
+  - type: redis
+    name: redis-internal
+    ipAllowList: [] # Chỉ cho phép nội bộ
